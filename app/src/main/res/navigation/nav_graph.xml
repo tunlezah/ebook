@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/libraryFragment">
+
+    <fragment
+        android:id="@+id/libraryFragment"
+        android:name="com.shelfwise.app.ui.library.LibraryFragment"
+        android:label="@string/library_title"
+        tools:layout="@layout/fragment_library">
+        <action
+            android:id="@+id/action_library_to_epub_reader"
+            app:destination="@id/epubReaderFragment" />
+        <action
+            android:id="@+id/action_library_to_pdf_reader"
+            app:destination="@id/pdfReaderFragment" />
+        <action
+            android:id="@+id/action_library_to_detail"
+            app:destination="@id/bookDetailFragment" />
+        <action
+            android:id="@+id/action_library_to_settings"
+            app:destination="@id/settingsFragment" />
+        <action
+            android:id="@+id/action_library_to_transfer"
+            app:destination="@id/transferFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/epubReaderFragment"
+        android:name="com.shelfwise.app.ui.reader.epub.EpubReaderFragment"
+        android:label="@string/reader_title"
+        tools:layout="@layout/fragment_epub_reader">
+        <argument
+            android:name="bookId"
+            app:argType="long" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/pdfReaderFragment"
+        android:name="com.shelfwise.app.ui.reader.pdf.PdfReaderFragment"
+        android:label="@string/reader_title"
+        tools:layout="@layout/fragment_pdf_reader">
+        <argument
+            android:name="bookId"
+            app:argType="long" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/bookDetailFragment"
+        android:name="com.shelfwise.app.ui.detail.BookDetailFragment"
+        android:label="@string/book_detail_info"
+        tools:layout="@layout/fragment_book_detail">
+        <argument
+            android:name="bookId"
+            app:argType="long" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.shelfwise.app.ui.settings.SettingsFragment"
+        android:label="@string/settings_title"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/transferFragment"
+        android:name="com.shelfwise.app.ui.settings.TransferFragment"
+        android:label="@string/transfer_title"
+        tools:layout="@layout/fragment_transfer" />
+
+</navigation>

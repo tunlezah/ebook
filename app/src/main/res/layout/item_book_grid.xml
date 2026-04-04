@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_sm">
+
+    <!-- Cover with progress overlay -->
+    <FrameLayout
+        android:layout_width="@dimen/book_cover_width"
+        android:layout_height="@dimen/book_cover_height">
+
+        <ImageView
+            android:id="@+id/coverImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/book_cover_placeholder"
+            android:contentDescription="@null"
+            android:scaleType="centerCrop" />
+
+        <!-- Format badge -->
+        <TextView
+            android:id="@+id/formatBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="4dp"
+            android:background="@drawable/badge_background"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            tools:text="EPUB" />
+
+        <!-- Progress bar at bottom of cover -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_gravity="bottom"
+            android:max="100"
+            android:progressDrawable="@drawable/progress_bar_drawable"
+            android:visibility="gone"
+            tools:progress="45" />
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/titleText"
+        android:layout_width="@dimen/book_cover_width"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/spacing_xs"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="?android:textColorPrimary"
+        android:textSize="@dimen/text_caption"
+        tools:text="Book Title" />
+
+    <TextView
+        android:id="@+id/authorText"
+        android:layout_width="@dimen/book_cover_width"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="?android:textColorSecondary"
+        android:textSize="10sp"
+        tools:text="Author Name" />
+
+</LinearLayout>

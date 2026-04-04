@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_view_toggle"
+        android:icon="@android:drawable/ic_menu_gallery"
+        android:title="@string/view_grid"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_sort"
+        android:title="Sort"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_sort_title"
+                android:title="@string/sort_title" />
+            <item
+                android:id="@+id/action_sort_author"
+                android:title="@string/sort_author" />
+            <item
+                android:id="@+id/action_sort_recent"
+                android:title="@string/sort_recent" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_transfer"
+        android:icon="@android:drawable/ic_menu_share"
+        android:title="@string/transfer_title"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="@string/settings_title"
+        app:showAsAction="never" />
+
+</menu>
