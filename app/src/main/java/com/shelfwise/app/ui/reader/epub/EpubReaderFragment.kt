@@ -18,6 +18,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.shelfwise.app.databinding.FragmentEpubReaderBinding
+import com.shelfwise.app.util.showToast
 import com.shelfwise.app.reader.epub.EpubParser
 import com.shelfwise.app.util.appContainer
 import kotlinx.coroutines.flow.collectLatest
@@ -147,7 +148,7 @@ class EpubReaderFragment : Fragment() {
                     }
 
                     state.error?.let { error ->
-                        com.shelfwise.app.util.showToast(requireContext(), error)
+                        requireContext().showToast(error)
                     }
                 }
             }
@@ -233,9 +234,4 @@ class EpubReaderFragment : Fragment() {
         _binding = null
         super.onDestroyView()
     }
-}
-
-// Utility function used in observer
-private fun com.shelfwise.app.util.showToast(context: android.content.Context, message: String) {
-    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
 }

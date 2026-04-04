@@ -9,7 +9,6 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.shelfwise.app.BuildConfig
 import com.shelfwise.app.R
 import com.shelfwise.app.databinding.FragmentSettingsBinding
 import com.shelfwise.app.util.PreferencesManager
@@ -168,7 +167,12 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupVersion() {
-        binding.versionText.text = getString(R.string.settings_version, BuildConfig.VERSION_NAME)
+        val versionName = try {
+            requireContext().packageManager.getPackageInfo(requireContext().packageName, 0).versionName ?: "1.0.0"
+        } catch (_: Exception) {
+            "1.0.0"
+        }
+        binding.versionText.text = getString(R.string.settings_version, versionName)
     }
 
     override fun onDestroyView() {
