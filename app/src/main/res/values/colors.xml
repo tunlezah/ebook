@@ -23,6 +23,12 @@
     <color name="reader_text_sepia">#3B2F1E</color>
     <color name="reader_text_dark">#D4D4D4</color>
 
+    <!-- Reader chrome (top/bottom overlay bars shown over content) -->
+    <color name="reader_chrome_background">#CC000000</color>
+    <color name="reader_chrome_foreground">#FFFFFF</color>
+    <color name="reader_chrome_foreground_subtle">#AAAAAA</color>
+    <color name="reader_surface_pdf">#1A1A1A</color>
+
     <!-- Utility -->
     <color name="divider">#E0DDD8</color>
     <color name="progress_bar">#8B7355</color>

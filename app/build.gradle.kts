@@ -86,9 +86,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
     implementation("androidx.savedstate:savedstate-ktx:1.2.1")
 
     // Navigation
@@ -104,7 +104,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Material Design
-    implementation("com.google.android.material:material:1.11.0")
+    implementation("com.google.android.material:material:1.12.0")
 
     // RecyclerView
     implementation("androidx.recyclerview:recyclerview:1.3.2")
@@ -113,7 +113,7 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Image Loading - Coil (lightweight, Kotlin-first)
-    implementation("io.coil-kt:coil:2.5.0")
+    implementation("io.coil-kt:coil:2.7.0")
 
     // NanoHTTPD - Embedded HTTP server for wireless file transfer
     implementation("org.nanohttpd:nanohttpd:2.3.1")

@@ -4,10 +4,12 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.os.StrictMode
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.shelfwise.app.BuildConfig
 import com.shelfwise.app.di.AppContainer
 
 class EBookApp : Application(), ImageLoaderFactory {
@@ -17,6 +19,26 @@ class EBookApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.DEBUG) {
+            StrictMode.setThreadPolicy(
+                StrictMode.ThreadPolicy.Builder()
+                    .detectDiskReads()
+                    .detectDiskWrites()
+                    .detectNetwork()
+                    .detectCustomSlowCalls()
+                    .penaltyLog()
+                    .build()
+            )
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder()
+                    .detectLeakedClosableObjects()
+                    .detectLeakedRegistrationObjects()
+                    .detectActivityLeaks()
+                    .detectFileUriExposure()
+                    .penaltyLog()
+                    .build()
+            )
+        }
         container = AppContainer(this)
         createNotificationChannels()
     }

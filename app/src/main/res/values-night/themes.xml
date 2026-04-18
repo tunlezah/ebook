@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Night override for Theme.ShelfWise. Colors come from values-night/colors.xml;
+         only night-specific system-bar flags need overriding here. -->
     <style name="Theme.ShelfWise" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_variant</item>
@@ -12,19 +14,8 @@
         <item name="colorOnSurface">@color/on_surface</item>
         <item name="colorOnBackground">@color/on_background</item>
         <item name="android:statusBarColor">@color/background</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:navigationBarColor">@color/background</item>
-        <item name="android:windowLightNavigationBar">true</item>
-    </style>
-
-    <style name="Theme.ShelfWise.Splash" parent="Theme.SplashScreen.IconBackground">
-        <item name="windowSplashScreenBackground">@color/background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.ShelfWise</item>
-    </style>
-
-    <!-- Reader-specific theme - no system bars -->
-    <style name="Theme.ShelfWise.Reader" parent="Theme.ShelfWise">
-        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

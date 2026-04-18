@@ -22,6 +22,14 @@
     <string name="reading_settings">Reading settings</string>
     <string name="page_of">Page %1$d of %2$d</string>
 
+    <!-- Reader content descriptions -->
+    <string name="cd_reader_back">Close reader</string>
+    <string name="cd_reader_toc">Table of contents</string>
+    <string name="cd_reader_settings">Reading settings</string>
+    <string name="cd_reader_next_page">Next page</string>
+    <string name="cd_reader_previous_page">Previous page</string>
+    <string name="cd_reader_progress">Reading progress</string>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_appearance">Appearance</string>
@@ -72,4 +80,11 @@
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="close">Close</string>
+
+    <!-- Library content descriptions -->
+    <string name="cd_library_book_cover">Book cover</string>
+    <string name="cd_library_search">Search</string>
+    <string name="cd_library_sort">Sort books</string>
+    <string name="cd_library_view_toggle">Toggle grid or list view</string>
+    <string name="cd_library_add_folder">Add folder</string>
 </resources>
