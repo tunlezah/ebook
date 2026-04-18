@@ -1,11 +1,14 @@
 package com.shelfwise.app.ui.reader.epub
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.SeekBar
@@ -23,6 +26,8 @@ import com.shelfwise.app.reader.epub.EpubParser
 import com.shelfwise.app.util.appContainer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.io.ByteArrayInputStream
 
 class EpubReaderFragment : Fragment() {
 
@@ -65,8 +70,15 @@ class EpubReaderFragment : Fragment() {
     private fun setupWebView() {
         binding.webView.apply {
             settings.javaScriptEnabled = true
+            // Local file/content schemes are locked down; EPUB resources flow through
+            // our synthetic https://shelfwise.local origin via shouldInterceptRequest.
             settings.allowFileAccess = false
             settings.allowContentAccess = false
+            settings.allowFileAccessFromFileURLs = false
+            settings.allowUniversalAccessFromFileURLs = false
+            // Must be false so the interceptor is actually invoked for <img>/<link>/fonts.
+            settings.blockNetworkImage = false
+            settings.blockNetworkLoads = false
             settings.domStorageEnabled = false
             settings.setSupportZoom(false)
             settings.builtInZoomControls = false
@@ -88,11 +100,108 @@ class EpubReaderFragment : Fragment() {
                         view?.evaluateJavascript("window.scrollTo(0, $scrollY)", null)
                     }
                 }
+
+                override fun shouldInterceptRequest(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): WebResourceResponse? {
+                    val url = request?.url ?: return null
+                    if (url.host != EPUB_ASSET_HOST) return null
+                    return interceptEpubResource(url)
+                }
             }
         }
 
         // Apply blue light filter
         binding.blueLightOverlay.isVisible = appContainer.preferencesManager.blueLightFilter
+    }
+
+    private fun interceptEpubResource(url: Uri): WebResourceResponse? {
+        // Capture everything the worker thread needs under the UI thread snapshot.
+        val snapshot = assetSnapshot ?: return null
+        // Normalize: strip leading '/', collapse any residual '../' segments.
+        val rawPath = (url.path ?: return null).trimStart('/')
+        val normalized = normalizeZipPath(rawPath) ?: return null
+        val bytes = try {
+            runBlocking {
+                snapshot.parser.getResource(snapshot.bookUri, "", normalized)
+            }
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val mime = mimeTypeForPath(normalized)
+        return WebResourceResponse(mime, null, ByteArrayInputStream(bytes))
+    }
+
+    private fun normalizeZipPath(path: String): String? {
+        val segments = path.split('/').toMutableList()
+        val out = ArrayList<String>(segments.size)
+        for (s in segments) {
+            when (s) {
+                "", "." -> { /* skip */ }
+                ".." -> if (out.isNotEmpty()) out.removeAt(out.size - 1) else return null
+                else -> out.add(s)
+            }
+        }
+        return out.joinToString("/")
+    }
+
+    private fun mimeTypeForPath(path: String): String {
+        val ext = path.substringAfterLast('.', "").lowercase()
+        return when (ext) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "svg" -> "image/svg+xml"
+            "css" -> "text/css"
+            "js" -> "application/javascript"
+            "html", "htm", "xhtml" -> "text/html"
+            "woff" -> "application/font-woff"
+            "woff2" -> "application/font-woff2"
+            "ttf" -> "font/ttf"
+            "otf" -> "font/otf"
+            "xml" -> "application/xml"
+            else -> "application/octet-stream"
+        }
+    }
+
+    // Snapshot of data needed by the WebView worker thread for interception.
+    // Volatile: written on UI thread, read on WebView worker thread.
+    private data class AssetSnapshot(
+        val parser: EpubParser,
+        val bookUri: Uri
+    )
+
+    @Volatile
+    private var assetSnapshot: AssetSnapshot? = null
+
+    private fun buildChapterBaseUrl(state: EpubReaderViewModel.ReaderState): String {
+        val content = state.content
+        val chapters = content?.chapters
+        val idx = state.currentChapter
+        if (content == null || chapters == null || idx < 0 || idx >= chapters.size) {
+            return "https://$EPUB_ASSET_HOST/"
+        }
+        val chapterHref = chapters[idx].href
+        val chapterDir = chapterHref.substringBeforeLast('/', "")
+        // Anchor relative references at <opfDir>/<chapterDir>/ so WebView normalizes
+        // '../' refs against the correct starting point inside the zip.
+        val prefix = buildString {
+            if (content.opfDir.isNotEmpty()) {
+                append(content.opfDir.trim('/'))
+                append('/')
+            }
+            if (chapterDir.isNotEmpty()) {
+                append(chapterDir.trim('/'))
+                append('/')
+            }
+        }
+        return "https://$EPUB_ASSET_HOST/$prefix"
+    }
+
+    companion object {
+        private const val EPUB_ASSET_HOST = "shelfwise.local"
     }
 
     private fun setupControls() {
@@ -130,12 +239,21 @@ class EpubReaderFragment : Fragment() {
 
                     state.book?.let { book ->
                         binding.titleText.text = book.title
+                        // Refresh the worker-thread snapshot whenever the book changes.
+                        val currentSnap = assetSnapshot
+                        if (currentSnap == null || currentSnap.bookUri.toString() != book.filePath) {
+                            assetSnapshot = AssetSnapshot(
+                                parser = EpubParser(requireContext().applicationContext),
+                                bookUri = Uri.parse(book.filePath)
+                            )
+                        }
                     }
 
                     state.chapterHtml?.let { html ->
                         val styledHtml = viewModel.buildStyledHtml(html)
+                        val baseUrl = buildChapterBaseUrl(state)
                         binding.webView.loadDataWithBaseURL(
-                            null, styledHtml, "text/html", "UTF-8", null
+                            baseUrl, styledHtml, "text/html", "UTF-8", null
                         )
                     }
 
@@ -230,6 +348,7 @@ class EpubReaderFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        assetSnapshot = null
         binding.webView.destroy()
         _binding = null
         super.onDestroyView()

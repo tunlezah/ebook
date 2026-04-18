@@ -12,3 +12,10 @@
 # Keep data classes for serialization
 -keep class com.shelfwise.app.data.model.** { *; }
 -keep class com.shelfwise.app.data.db.entity.** { *; }
+
+# WebView JavascriptInterface
+# Preserve @JavascriptInterface methods on any class injected into a WebView
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keep class com.shelfwise.app.ui.reader.epub.EpubReaderFragment$WebAppInterface { *; }
