@@ -191,6 +191,13 @@ class EpubReaderFragment : Fragment() {
             "ttf" -> "font/ttf"
             "otf" -> "font/otf"
             "xml" -> "application/xml"
+            // EPUB3 media overlays / embedded media
+            "mp3" -> "audio/mpeg"
+            "m4a", "aac" -> "audio/mp4"
+            "ogg", "opus" -> "audio/ogg"
+            "wav" -> "audio/wav"
+            "mp4" -> "video/mp4"
+            "webm" -> "video/webm"
             else -> "application/octet-stream"
         }
     }
