@@ -60,8 +60,12 @@ class HttpFileServer(
             )
             response
         } catch (e: Exception) {
+            // Never echo raw exception text back to the client -- if the
+            // exception happens to include the session URL, the token could
+            // leak into the response body. Log server-side, reply opaquely.
+            Log.w(TAG, "Server error on ${sanitizeForLog(session.uri)}", e)
             newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error: ${e.message}"
+                Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Internal server error"
             )
         }
     }
@@ -204,9 +208,36 @@ class HttpFileServer(
     private fun serveFileList(): Response {
         val files = uploadDir.listFiles()?.filter { it.isFile } ?: emptyList()
         val json = files.joinToString(",", "[", "]") { file ->
-            """{"name":"${file.name.replace("\"", "\\\"")}","size":"${formatSize(file.length())}"}"""
+            """{"name":"${jsonEscape(file.name)}","size":"${jsonEscape(formatSize(file.length()))}"}"""
         }
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
+    }
+
+    /**
+     * Escape a string for embedding inside a JSON string literal.
+     * `uploadDir` can contain filenames from prior versions or sideloading
+     * that weren't run through [sanitizeFileName], so we must not assume
+     * the input is already JSON-safe.
+     */
+    private fun jsonEscape(s: String): String {
+        val sb = StringBuilder(s.length + 2)
+        for (c in s) {
+            when (c) {
+                '"' -> sb.append("\\\"")
+                '\\' -> sb.append("\\\\")
+                '\b' -> sb.append("\\b")
+                '\u000c' -> sb.append("\\f")
+                '\n' -> sb.append("\\n")
+                '\r' -> sb.append("\\r")
+                '\t' -> sb.append("\\t")
+                else -> if (c.code < 0x20) {
+                    sb.append("\\u").append(String.format("%04x", c.code))
+                } else {
+                    sb.append(c)
+                }
+            }
+        }
+        return sb.toString()
     }
 
     private fun serveFileDownload(relPath: String): Response {

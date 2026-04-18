@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
@@ -45,7 +43,6 @@ class EpubSession internal constructor(
     val content: EpubContent
 ) : Closeable {
 
-    private val mutex = Mutex()
     @Volatile private var closed = false
 
     val opfDir: String get() = content.opfDir
@@ -67,14 +64,15 @@ class EpubSession internal constructor(
         suffixHit?.let { readEntryBytes(it) }
     }
 
-    private suspend fun readEntryBytes(path: String): ByteArray? {
+    private fun readEntryBytes(path: String): ByteArray? {
         if (closed) return null
         val entry = entries[path] ?: return null
         return try {
-            mutex.withLock {
-                if (closed) return null
-                zipFile.getInputStream(entry).use { it.readBytes() }
-            }
+            // java.util.zip.ZipFile is documented as safe for concurrent reads
+            // across threads; getInputStream returns a fresh stream per call.
+            // No mutex needed -- holding one would serialise every WebView
+            // worker-thread request and defeat the point of the cache.
+            zipFile.getInputStream(entry).use { it.readBytes() }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read zip entry: $path", e)
             null
@@ -200,10 +198,12 @@ class EpubParser(private val context: Context) {
         val hash = stableHash(uri.toString())
         val dest = File(cacheDir, "$hash.epub")
 
-        // Look up SAF metadata (size/mtime); if both match, reuse.
+        // Look up SAF metadata (size/mtime); if both match exactly, reuse.
+        // Using `==` on mtime prevents a stale-cache hit when the source is
+        // replaced with an older copy of identical size (metadata edit, etc.).
         val (safSize, safMtime) = safSizeAndMtime(uri)
         if (dest.exists() && safSize != null && safSize == dest.length() &&
-            safMtime != null && safMtime <= dest.lastModified()) {
+            safMtime != null && safMtime == dest.lastModified()) {
             return dest
         }
 

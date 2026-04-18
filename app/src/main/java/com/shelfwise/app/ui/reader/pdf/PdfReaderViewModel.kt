@@ -171,13 +171,31 @@ class PdfReaderViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        synchronized(pageCache) {
-            pageCache.values.forEach { if (!it.isRecycled) it.recycle() }
-            pageCache.clear()
+        // Queue the close on the single-thread render executor so it runs AFTER
+        // any in-flight renderPage task completes. Closing pdfRenderer while a
+        // native page render is mid-execution on this same thread would crash;
+        // because the executor is single-threaded, our task can't start until
+        // the prior render returns. onCleared runs on the main thread so we
+        // cannot suspend or withLock here -- this FIFO-on-executor ordering
+        // gives us the same guarantee without blocking the UI.
+        try {
+            renderExecutor.execute {
+                try { pdfRenderer?.close() } catch (_: Exception) {}
+                pdfRenderer = null
+                try { fileDescriptor?.close() } catch (_: Exception) {}
+                fileDescriptor = null
+                synchronized(pageCache) {
+                    pageCache.values.forEach { if (!it.isRecycled) it.recycle() }
+                    pageCache.clear()
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Executor already shutting down (shouldn't happen in normal flow);
+            // fall back to direct close. Anything in-flight is on its own.
+            try { pdfRenderer?.close() } catch (_: Exception) {}
+            try { fileDescriptor?.close() } catch (_: Exception) {}
         }
-        pdfRenderer?.close()
-        fileDescriptor?.close()
+        // Orderly shutdown: existing queued tasks (including our close task) drain.
         renderDispatcher.close()
-        renderExecutor.shutdown()
     }
 }

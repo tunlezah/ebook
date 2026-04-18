@@ -17,6 +17,9 @@ class HttpFileServerTest {
     private val port = 18080
     private val uploadedFiles = mutableListOf<String>()
 
+    /** Base URL including the per-instance token prefix. */
+    private val base: String get() = "http://localhost:$port/t/${server.token}"
+
     @Before
     fun setup() {
         uploadDir = File(System.getProperty("java.io.tmpdir"), "shelfwise_test_${System.currentTimeMillis()}")
@@ -32,8 +35,29 @@ class HttpFileServerTest {
     }
 
     @Test
-    fun `main page returns 200`() {
+    fun `unauthenticated request returns 403`() {
+        val url = URL("http://localhost:$port/files")
+        val conn = url.openConnection() as HttpURLConnection
+        assertEquals(403, conn.responseCode)
+        conn.disconnect()
+    }
+
+    @Test
+    fun `unauthenticated root does not leak token via redirect`() {
         val url = URL("http://localhost:$port/")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = false
+        val code = conn.responseCode
+        val location = conn.getHeaderField("Location")
+        conn.disconnect()
+        assertEquals(403, code)
+        // Any Location header must NOT contain the token.
+        assertTrue(location == null || !location.contains(server.token))
+    }
+
+    @Test
+    fun `main page returns 200`() {
+        val url = URL("$base/")
         val conn = url.openConnection() as HttpURLConnection
         assertEquals(200, conn.responseCode)
         val body = conn.inputStream.bufferedReader().readText()
@@ -43,7 +67,7 @@ class HttpFileServerTest {
 
     @Test
     fun `file list returns empty array`() {
-        val url = URL("http://localhost:$port/files")
+        val url = URL("$base/files")
         val conn = url.openConnection() as HttpURLConnection
         assertEquals(200, conn.responseCode)
         val body = conn.inputStream.bufferedReader().readText()
@@ -56,7 +80,7 @@ class HttpFileServerTest {
         File(uploadDir, "test.epub").writeText("dummy")
         File(uploadDir, "test.pdf").writeText("dummy")
 
-        val url = URL("http://localhost:$port/files")
+        val url = URL("$base/files")
         val conn = url.openConnection() as HttpURLConnection
         val body = conn.inputStream.bufferedReader().readText()
         assertTrue(body.contains("test.epub"))
@@ -66,7 +90,7 @@ class HttpFileServerTest {
 
     @Test
     fun `download nonexistent file returns 404`() {
-        val url = URL("http://localhost:$port/download/nonexistent.epub")
+        val url = URL("$base/download/nonexistent.epub")
         val conn = url.openConnection() as HttpURLConnection
         assertEquals(404, conn.responseCode)
         conn.disconnect()
@@ -77,7 +101,7 @@ class HttpFileServerTest {
         val testContent = "test epub content"
         File(uploadDir, "test.epub").writeText(testContent)
 
-        val url = URL("http://localhost:$port/download/test.epub")
+        val url = URL("$base/download/test.epub")
         val conn = url.openConnection() as HttpURLConnection
         assertEquals(200, conn.responseCode)
         val body = conn.inputStream.bufferedReader().readText()
@@ -90,12 +114,30 @@ class HttpFileServerTest {
         File(uploadDir, "test.epub").writeText("content")
         assertTrue(File(uploadDir, "test.epub").exists())
 
-        val url = URL("http://localhost:$port/delete/test.epub")
+        val url = URL("$base/delete/test.epub")
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         assertEquals(200, conn.responseCode)
         conn.disconnect()
 
         assertTrue(!File(uploadDir, "test.epub").exists())
+    }
+
+    @Test
+    fun `cookie-only auth is accepted`() {
+        val url = URL("http://localhost:$port/files")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.setRequestProperty("Cookie", "shelfwise_auth=${server.token}")
+        assertEquals(200, conn.responseCode)
+        conn.disconnect()
+    }
+
+    @Test
+    fun `wrong cookie is rejected`() {
+        val url = URL("http://localhost:$port/files")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.setRequestProperty("Cookie", "shelfwise_auth=wrongvalue")
+        assertEquals(403, conn.responseCode)
+        conn.disconnect()
     }
 }

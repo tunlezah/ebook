@@ -17,7 +17,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Locale shrinking - drop Material's bundled translations (~1-2 MB)
-        resourceConfigurations += listOf("en")
+        resourceConfigurations.add("en")
 
         // ABI filters - only ship common mobile ABIs
         ndk {
