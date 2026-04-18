@@ -84,8 +84,6 @@ class MobiMetadataExtractor(private val context: Context) {
                 // EOF; still scan whatever is left in the buffer.
                 if (bufferFilled < 3) return null
                 return findAndExtract(buffer, bufferFilled, input, jpegMagic, pngMagic, uri)
-                    // even if no image, we're done
-                    ?: null
             }
             bufferFilled += n
             totalConsumed += n

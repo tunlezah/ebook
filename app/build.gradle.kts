@@ -58,6 +58,15 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        // Make android.util.Log and other framework stubs no-op in JVM unit
+        // tests instead of throwing "Method not mocked". Required for
+        // HttpFileServerTest, which exercises code paths that call Log.d
+        // from NanoHTTPD handler threads -- an unmocked throw there crashes
+        // the socket handler and surfaces as SocketException client-side.
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources.excludes += setOf(
             "META-INF/AL2.0",
