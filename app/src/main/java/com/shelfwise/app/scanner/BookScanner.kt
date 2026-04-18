@@ -69,7 +69,7 @@ class BookScanner(
         ScanResult(added, removed, errors)
     }
 
-    private fun scanDirectory(
+    private suspend fun scanDirectory(
         treeUri: Uri,
         parentUri: Uri,
         foundPaths: MutableSet<String>,
@@ -107,9 +107,7 @@ class BookScanner(
                     scanDirectory(treeUri, childUri, foundPaths, onBookFound)
                 } else if (displayName.isBookFile()) {
                     val fileUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childDocId)
-                    kotlinx.coroutines.runBlocking {
-                        onBookFound(fileUri, displayName, fileSize)
-                    }
+                    onBookFound(fileUri, displayName, fileSize)
                 }
             }
         }

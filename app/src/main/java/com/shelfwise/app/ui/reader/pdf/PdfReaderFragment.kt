@@ -28,7 +28,8 @@ class PdfReaderFragment : Fragment() {
         PdfReaderViewModelFactory(
             this,
             appContainer.bookRepository,
-            requireContext()
+            // Pass application context: the VM outlives this Fragment/Activity.
+            requireContext().applicationContext
         )
     }
 
@@ -50,7 +51,12 @@ class PdfReaderFragment : Fragment() {
             return
         }
 
-        viewModel.loadBook(bookId)
+        // Only load on first creation. After a config change, the retained
+        // ViewModel already has the book open; re-calling loadBook would
+        // re-parse the PDF and churn file descriptors.
+        if (viewModel.state.value.book == null) {
+            viewModel.loadBook(bookId)
+        }
         observeState()
     }
 

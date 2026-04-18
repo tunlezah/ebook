@@ -11,7 +11,6 @@ import com.shelfwise.app.R
 import com.shelfwise.app.data.model.Book
 import com.shelfwise.app.databinding.ItemBookGridBinding
 import com.shelfwise.app.databinding.ItemBookListBinding
-import java.io.File
 
 class BookAdapter(
     private var isGridMode: Boolean = true,
@@ -60,14 +59,11 @@ class BookAdapter(
             binding.formatBadge.text = book.format.name
 
             // Load cover image
-            if (book.coverPath != null && File(book.coverPath).exists()) {
-                binding.coverImage.load(File(book.coverPath)) {
-                    crossfade(false)
-                    placeholder(R.drawable.book_cover_placeholder)
-                }
-            } else {
-                binding.coverImage.setImageResource(0)
-                binding.coverImage.setBackgroundResource(R.drawable.book_cover_placeholder)
+            val coverPath = book.coverPath?.takeIf { it.isNotBlank() }
+            binding.coverImage.load(coverPath) {
+                crossfade(false)
+                placeholder(R.drawable.book_cover_placeholder)
+                error(R.drawable.book_cover_placeholder)
             }
 
             // Progress bar
@@ -90,14 +86,11 @@ class BookAdapter(
             binding.authorText.text = book.author
             binding.formatBadge.text = book.format.name
 
-            if (book.coverPath != null && File(book.coverPath).exists()) {
-                binding.coverImage.load(File(book.coverPath)) {
-                    crossfade(false)
-                    placeholder(R.drawable.book_cover_placeholder)
-                }
-            } else {
-                binding.coverImage.setImageResource(0)
-                binding.coverImage.setBackgroundResource(R.drawable.book_cover_placeholder)
+            val coverPath = book.coverPath?.takeIf { it.isNotBlank() }
+            binding.coverImage.load(coverPath) {
+                crossfade(false)
+                placeholder(R.drawable.book_cover_placeholder)
+                error(R.drawable.book_cover_placeholder)
             }
 
             val progress = (book.overallProgress * 100).toInt()

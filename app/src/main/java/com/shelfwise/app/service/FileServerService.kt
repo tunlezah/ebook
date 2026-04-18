@@ -67,7 +67,9 @@ class FileServerService : Service() {
         wakeLock?.acquire(60 * 60 * 1000L) // Max 1 hour
 
         val ipAddress = getDeviceIpAddress()
-        val url = "http://$ipAddress:$port"
+        // Surface the tokenized URL everywhere so users always see the auth-
+        // bearing address. The unauthenticated host:port alone is useless now.
+        val url = server!!.authenticatedUrl(ipAddress)
 
         val notification = buildNotification(url)
         startForeground(NOTIFICATION_ID, notification)

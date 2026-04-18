@@ -9,15 +9,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shelfwise.app.data.model.Book
 import com.shelfwise.app.data.repository.BookRepository
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class PdfReaderViewModel(
     private val repository: BookRepository,
+    // Must be an application context — the ViewModel outlives the Activity
+    // across configuration changes. The factory is responsible for passing
+    // `applicationContext`; do not pass an Activity here.
     private val context: Context,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -36,6 +44,13 @@ class PdfReaderViewModel(
     private var pdfRenderer: PdfRenderer? = null
     private var fileDescriptor: android.os.ParcelFileDescriptor? = null
 
+    // Serialise all PdfRenderer access: only one openPage may be live at a time.
+    private val renderMutex = Mutex()
+    private val renderExecutor: ExecutorService = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "PdfRender").apply { isDaemon = true }
+    }
+    private val renderDispatcher: ExecutorCoroutineDispatcher = renderExecutor.asCoroutineDispatcher()
+
     // Simple LRU cache for rendered pages
     private val pageCache = object : LinkedHashMap<Int, Bitmap>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Bitmap>?): Boolean {
@@ -47,10 +62,42 @@ class PdfReaderViewModel(
         }
     }
 
+    /**
+     * Close any existing PdfRenderer / ParcelFileDescriptor and recycle cached
+     * bitmaps. Runs on [renderDispatcher] under [renderMutex] so it cannot race
+     * with an in-flight [renderPage] call that might be mid-openPage.
+     */
+    private suspend fun releaseRenderer() {
+        withContext(renderDispatcher) {
+            renderMutex.withLock {
+                try {
+                    pdfRenderer?.close()
+                } catch (_: Exception) {
+                }
+                pdfRenderer = null
+                try {
+                    fileDescriptor?.close()
+                } catch (_: Exception) {
+                }
+                fileDescriptor = null
+                synchronized(pageCache) {
+                    pageCache.values.forEach { if (!it.isRecycled) it.recycle() }
+                    pageCache.clear()
+                }
+            }
+        }
+    }
+
     fun loadBook(bookId: Long) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true)
             try {
+                // If we were already holding a renderer/FD (e.g. loadBook called
+                // twice, or switching books), tear it down first. This must happen
+                // under renderMutex so any in-flight renderPage finishes before we
+                // close its renderer.
+                releaseRenderer()
+
                 val book = repository.getBookById(bookId)
                 if (book == null) {
                     _state.value = _state.value.copy(error = "Book not found", isLoading = false)
@@ -58,9 +105,11 @@ class PdfReaderViewModel(
                 }
 
                 val uri = Uri.parse(book.filePath)
-                withContext(Dispatchers.IO) {
-                    fileDescriptor = context.contentResolver.openFileDescriptor(uri, "r")
-                    pdfRenderer = PdfRenderer(fileDescriptor!!)
+                withContext(renderDispatcher) {
+                    renderMutex.withLock {
+                        fileDescriptor = context.contentResolver.openFileDescriptor(uri, "r")
+                        pdfRenderer = PdfRenderer(fileDescriptor!!)
+                    }
                 }
 
                 val renderer = pdfRenderer!!
@@ -82,28 +131,30 @@ class PdfReaderViewModel(
         }
     }
 
-    suspend fun renderPage(pageIndex: Int, viewWidth: Int): Bitmap? = withContext(Dispatchers.IO) {
-        val cached = pageCache[pageIndex]
-        if (cached != null && !cached.isRecycled) return@withContext cached
+    suspend fun renderPage(pageIndex: Int, viewWidth: Int): Bitmap? = withContext(renderDispatcher) {
+        renderMutex.withLock {
+            val cached = synchronized(pageCache) { pageCache[pageIndex] }
+            if (cached != null && !cached.isRecycled) return@withLock cached
 
-        val renderer = pdfRenderer ?: return@withContext null
-        if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@withContext null
+            val renderer = pdfRenderer ?: return@withLock null
+            if (pageIndex < 0 || pageIndex >= renderer.pageCount) return@withLock null
 
-        try {
-            val page = renderer.openPage(pageIndex)
-            val scale = viewWidth.toFloat() / page.width
-            val height = (page.height * scale).toInt()
+            try {
+                val page = renderer.openPage(pageIndex)
+                val scale = viewWidth.toFloat() / page.width
+                val height = (page.height * scale).toInt()
 
-            val bitmap = Bitmap.createBitmap(viewWidth, height, Bitmap.Config.RGB_565)
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            page.close()
+                val bitmap = Bitmap.createBitmap(viewWidth, height, Bitmap.Config.RGB_565)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
 
-            synchronized(pageCache) {
-                pageCache[pageIndex] = bitmap
+                synchronized(pageCache) {
+                    pageCache[pageIndex] = bitmap
+                }
+                bitmap
+            } catch (_: Exception) {
+                null
             }
-            bitmap
-        } catch (_: Exception) {
-            null
         }
     }
 
@@ -120,9 +171,31 @@ class PdfReaderViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        pageCache.values.forEach { it.recycle() }
-        pageCache.clear()
-        pdfRenderer?.close()
-        fileDescriptor?.close()
+        // Queue the close on the single-thread render executor so it runs AFTER
+        // any in-flight renderPage task completes. Closing pdfRenderer while a
+        // native page render is mid-execution on this same thread would crash;
+        // because the executor is single-threaded, our task can't start until
+        // the prior render returns. onCleared runs on the main thread so we
+        // cannot suspend or withLock here -- this FIFO-on-executor ordering
+        // gives us the same guarantee without blocking the UI.
+        try {
+            renderExecutor.execute {
+                try { pdfRenderer?.close() } catch (_: Exception) {}
+                pdfRenderer = null
+                try { fileDescriptor?.close() } catch (_: Exception) {}
+                fileDescriptor = null
+                synchronized(pageCache) {
+                    pageCache.values.forEach { if (!it.isRecycled) it.recycle() }
+                    pageCache.clear()
+                }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            // Executor already shutting down (shouldn't happen in normal flow);
+            // fall back to direct close. Anything in-flight is on its own.
+            try { pdfRenderer?.close() } catch (_: Exception) {}
+            try { fileDescriptor?.close() } catch (_: Exception) {}
+        }
+        // Orderly shutdown: existing queued tasks (including our close task) drain.
+        renderDispatcher.close()
     }
 }

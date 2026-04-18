@@ -9,6 +9,7 @@ import com.shelfwise.app.data.repository.BookRepository
 import com.shelfwise.app.reader.epub.EpubChapter
 import com.shelfwise.app.reader.epub.EpubContent
 import com.shelfwise.app.reader.epub.EpubParser
+import com.shelfwise.app.reader.epub.EpubSession
 import com.shelfwise.app.util.PreferencesManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,10 @@ class EpubReaderViewModel(
     val state: StateFlow<ReaderState> = _state.asStateFlow()
 
     private var bookUri: Uri? = null
+    private var session: EpubSession? = null
+
+    /** Exposed so the Fragment's WebView interceptor can share the same zip handle. */
+    fun currentSession(): EpubSession? = session
 
     fun loadBook(bookId: Long) {
         viewModelScope.launch {
@@ -49,11 +54,17 @@ class EpubReaderViewModel(
                 val uri = Uri.parse(book.filePath)
                 bookUri = uri
 
-                val content = epubParser.parse(uri)
-                if (content == null) {
+                // Close any prior session (e.g. reloading a different book in the same VM).
+                session?.close()
+                session = null
+
+                val newSession = epubParser.openSession(uri)
+                if (newSession == null) {
                     _state.value = _state.value.copy(error = "Could not parse EPUB", isLoading = false)
                     return@launch
                 }
+                session = newSession
+                val content = newSession.content
 
                 // Update total chapters if changed
                 if (content.chapters.size != book.totalChapters) {
@@ -84,7 +95,13 @@ class EpubReaderViewModel(
 
             try {
                 val chapter = content.chapters[chapterIndex]
-                val html = epubParser.getChapterHtml(bookUri!!, content.opfDir, chapter.href)
+                val activeSession = session
+                val html = if (activeSession != null) {
+                    activeSession.getChapterHtml(chapter.href)
+                } else {
+                    // Fallback (shouldn't happen — loadBook always opens a session first).
+                    epubParser.getChapterHtml(bookUri!!, content.opfDir, chapter.href)
+                }
 
                 _state.value = _state.value.copy(
                     chapterHtml = html,
@@ -136,6 +153,15 @@ class EpubReaderViewModel(
 
     fun getChapters(): List<EpubChapter> {
         return _state.value.content?.chapters ?: emptyList()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            session?.close()
+        } catch (_: Exception) {
+        }
+        session = null
     }
 
     fun buildStyledHtml(rawHtml: String): String {

@@ -68,10 +68,11 @@
             android:layout_marginTop="@dimen/spacing_md"
             android:gravity="center"
             android:textColor="@color/secondary"
+            android:textIsSelectable="true"
             android:textSize="22sp"
             android:textStyle="bold"
             android:visibility="gone"
-            tools:text="http://192.168.1.42:8080" />
+            tools:text="http://192.168.1.42:8080/t/Ab3kR7/" />
 
         <!-- Instructions -->
         <TextView
@@ -83,6 +84,19 @@
             android:text="@string/transfer_instructions"
             android:textColor="?android:textColorSecondary"
             android:textSize="@dimen/text_subtitle"
+            android:visibility="gone" />
+
+        <!-- Token rotation / trusted-devices warning -->
+        <TextView
+            android:id="@+id/tokenWarningText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_sm"
+            android:gravity="center"
+            android:text="@string/transfer_url_token_warning"
+            android:textColor="?android:textColorSecondary"
+            android:textSize="@dimen/text_caption"
+            android:textStyle="italic"
             android:visibility="gone" />
 
         <!-- Auto-stop info -->

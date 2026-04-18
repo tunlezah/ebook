@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -19,7 +20,8 @@
         android:background="@color/blue_light_overlay"
         android:visibility="gone"
         android:clickable="false"
-        android:focusable="false" />
+        android:focusable="false"
+        android:importantForAccessibility="no" />
 
     <!-- Top toolbar (shown/hidden on center tap) -->
     <LinearLayout
@@ -27,7 +29,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:background="#CC000000"
+        android:background="@color/reader_chrome_background"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="@dimen/spacing_sm"
@@ -38,9 +40,9 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?android:selectableItemBackgroundBorderless"
-            android:contentDescription="@string/close"
+            android:contentDescription="@string/cd_reader_back"
             android:src="@android:drawable/ic_menu_revert"
-            android:tint="#FFFFFF" />
+            app:tint="@color/reader_chrome_foreground" />
 
         <TextView
             android:id="@+id/titleText"
@@ -50,7 +52,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:paddingHorizontal="@dimen/spacing_sm"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/reader_chrome_foreground"
             android:textSize="@dimen/text_subtitle"
             tools:text="Book Title" />
 
@@ -59,18 +61,18 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?android:selectableItemBackgroundBorderless"
-            android:contentDescription="@string/chapter_list"
+            android:contentDescription="@string/cd_reader_toc"
             android:src="@android:drawable/ic_menu_agenda"
-            android:tint="#FFFFFF" />
+            app:tint="@color/reader_chrome_foreground" />
 
         <ImageButton
             android:id="@+id/btnSettings"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="?android:selectableItemBackgroundBorderless"
-            android:contentDescription="@string/reading_settings"
+            android:contentDescription="@string/cd_reader_settings"
             android:src="@android:drawable/ic_menu_preferences"
-            android:tint="#FFFFFF" />
+            app:tint="@color/reader_chrome_foreground" />
 
     </LinearLayout>
 
@@ -80,7 +82,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="#CC000000"
+        android:background="@color/reader_chrome_background"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="@dimen/spacing_md"
@@ -91,7 +93,7 @@
             android:id="@+id/chapterText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/reader_chrome_foreground_subtle"
             android:textSize="@dimen/text_caption"
             tools:text="Chapter 3 of 24" />
 
@@ -100,6 +102,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:contentDescription="@string/cd_reader_progress"
             android:max="100"
             android:paddingHorizontal="@dimen/spacing_sm" />
 
@@ -107,7 +110,7 @@
             android:id="@+id/progressText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#AAAAAA"
+            android:textColor="@color/reader_chrome_foreground_subtle"
             android:textSize="@dimen/text_caption"
             tools:text="45%" />
 

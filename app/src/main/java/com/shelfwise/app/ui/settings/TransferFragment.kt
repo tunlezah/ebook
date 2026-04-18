@@ -118,9 +118,12 @@ class TransferFragment : Fragment() {
 
         if (running && url != null) {
             binding.statusText.text = getString(R.string.transfer_active)
+            // The URL already contains the rotating auth token; display it so
+            // the user can type or copy the full, token-bearing address.
             binding.serverUrlText.text = url
             binding.serverUrlText.isVisible = true
             binding.instructionsText.isVisible = true
+            binding.tokenWarningText.isVisible = true
             binding.autoStopText.text = getString(
                 R.string.transfer_auto_stop,
                 appContainer.preferencesManager.serverAutoStopMinutes
@@ -134,6 +137,7 @@ class TransferFragment : Fragment() {
             binding.statusText.text = getString(R.string.transfer_inactive)
             binding.serverUrlText.isVisible = false
             binding.instructionsText.isVisible = false
+            binding.tokenWarningText.isVisible = false
             binding.autoStopText.isVisible = false
             binding.btnToggleServer.text = getString(R.string.transfer_start)
             binding.statusIcon.setColorFilter(

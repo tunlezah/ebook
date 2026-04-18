@@ -18,7 +18,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:background="@drawable/book_cover_placeholder"
-            android:contentDescription="@null"
+            android:contentDescription="@string/cd_library_book_cover"
             android:scaleType="centerCrop" />
 
         <!-- Format badge -->
