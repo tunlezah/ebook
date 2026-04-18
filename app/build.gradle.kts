@@ -44,6 +44,9 @@ android {
 
     buildFeatures {
         viewBinding = true
+        // AGP 8.x disables BuildConfig generation by default; we rely on
+        // BuildConfig.DEBUG in EBookApp to gate StrictMode.
+        buildConfig = true
     }
 
     compileOptions {
