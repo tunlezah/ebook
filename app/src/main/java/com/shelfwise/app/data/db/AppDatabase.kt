@@ -5,11 +5,12 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.shelfwise.app.data.db.entity.BookEntity
+import com.shelfwise.app.data.db.migrations.AllMigrations
 
 @Database(
     entities = [BookEntity::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
@@ -26,7 +27,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "shelfwise.db"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(*AllMigrations.LIST)
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { INSTANCE = it }
             }

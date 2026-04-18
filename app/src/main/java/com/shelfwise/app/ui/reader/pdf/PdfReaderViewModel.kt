@@ -9,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shelfwise.app.data.model.Book
 import com.shelfwise.app.data.repository.BookRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +23,9 @@ import java.util.concurrent.Executors
 
 class PdfReaderViewModel(
     private val repository: BookRepository,
+    // Must be an application context — the ViewModel outlives the Activity
+    // across configuration changes. The factory is responsible for passing
+    // `applicationContext`; do not pass an Activity here.
     private val context: Context,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -60,10 +62,42 @@ class PdfReaderViewModel(
         }
     }
 
+    /**
+     * Close any existing PdfRenderer / ParcelFileDescriptor and recycle cached
+     * bitmaps. Runs on [renderDispatcher] under [renderMutex] so it cannot race
+     * with an in-flight [renderPage] call that might be mid-openPage.
+     */
+    private suspend fun releaseRenderer() {
+        withContext(renderDispatcher) {
+            renderMutex.withLock {
+                try {
+                    pdfRenderer?.close()
+                } catch (_: Exception) {
+                }
+                pdfRenderer = null
+                try {
+                    fileDescriptor?.close()
+                } catch (_: Exception) {
+                }
+                fileDescriptor = null
+                synchronized(pageCache) {
+                    pageCache.values.forEach { if (!it.isRecycled) it.recycle() }
+                    pageCache.clear()
+                }
+            }
+        }
+    }
+
     fun loadBook(bookId: Long) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true)
             try {
+                // If we were already holding a renderer/FD (e.g. loadBook called
+                // twice, or switching books), tear it down first. This must happen
+                // under renderMutex so any in-flight renderPage finishes before we
+                // close its renderer.
+                releaseRenderer()
+
                 val book = repository.getBookById(bookId)
                 if (book == null) {
                     _state.value = _state.value.copy(error = "Book not found", isLoading = false)
@@ -71,9 +105,11 @@ class PdfReaderViewModel(
                 }
 
                 val uri = Uri.parse(book.filePath)
-                withContext(Dispatchers.IO) {
-                    fileDescriptor = context.contentResolver.openFileDescriptor(uri, "r")
-                    pdfRenderer = PdfRenderer(fileDescriptor!!)
+                withContext(renderDispatcher) {
+                    renderMutex.withLock {
+                        fileDescriptor = context.contentResolver.openFileDescriptor(uri, "r")
+                        pdfRenderer = PdfRenderer(fileDescriptor!!)
+                    }
                 }
 
                 val renderer = pdfRenderer!!

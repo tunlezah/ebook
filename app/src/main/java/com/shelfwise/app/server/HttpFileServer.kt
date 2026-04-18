@@ -1,15 +1,25 @@
 package com.shelfwise.app.server
 
+import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
+import java.security.SecureRandom
 
 class HttpFileServer(
-    port: Int,
+    private val port: Int,
     private val uploadDir: File,
     private val onFileUploaded: (String) -> Unit
 ) : NanoHTTPD(port) {
+
+    /** Per-session random token. Rotates every time the server starts. */
+    val token: String = generateToken()
+
+    /** Prefix every valid request must carry, e.g. "/t/Ab3kR7". */
+    private val tokenPrefix: String = "/t/$token"
+
+    /** Helper exposed to UI/service: full URL including token, trailing slash. */
+    fun authenticatedUrl(host: String): String = "http://$host:$port$tokenPrefix/"
 
     init {
         uploadDir.mkdirs()
@@ -17,26 +27,78 @@ class HttpFileServer(
 
     override fun serve(session: IHTTPSession): Response {
         return try {
-            when {
-                session.method == Method.GET && session.uri == "/" -> serveMainPage()
-                session.method == Method.GET && session.uri == "/files" -> serveFileList()
-                session.method == Method.GET && session.uri.startsWith("/download/") -> serveFileDownload(session)
-                session.method == Method.POST && session.uri == "/upload" -> handleUpload(session)
-                session.method == Method.POST && session.uri.startsWith("/delete/") -> handleDelete(session)
+            if (!isAuthorized(session)) {
+                // Return a uniform 403 for every unauthorized request. Do NOT
+                // redirect the bare "/" to the tokenized root -- that would put
+                // the token in the Location header, leaking it to anyone who
+                // probes the advertised host:port on the LAN. The app UI shows
+                // the full tokenized URL; users never need a friendly redirect.
+                Log.d(TAG, "Rejected ${session.method} ${sanitizeForLog(session.uri)}: auth missing or bad")
+                return newFixedLengthResponse(
+                    Response.Status.FORBIDDEN, MIME_PLAINTEXT, "Forbidden"
+                )
+            }
+
+            // Path relative to the tokenized root. For cookie-auth requests we
+            // just use the URI as-is; for path-auth requests we strip the prefix.
+            val relPath = stripTokenPrefix(session.uri)
+
+            val response = when {
+                session.method == Method.GET && (relPath == "" || relPath == "/") -> serveMainPage()
+                session.method == Method.GET && relPath == "/files" -> serveFileList()
+                session.method == Method.GET && relPath.startsWith("/download/") -> serveFileDownload(relPath)
+                session.method == Method.POST && relPath == "/upload" -> handleUpload(session)
+                session.method == Method.POST && relPath.startsWith("/delete/") -> handleDelete(relPath)
                 else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_HTML, "Not found")
             }
+
+            // Set the auth cookie on every successful authorized request. Cheap
+            // and keeps relative fetches alive if the user tabs around.
+            response.addHeader(
+                "Set-Cookie",
+                "$COOKIE_NAME=$token; Path=/; HttpOnly; SameSite=Strict"
+            )
+            response
         } catch (e: Exception) {
-            newFixedLengthResponse(Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error: ${e.message}")
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR, MIME_PLAINTEXT, "Error: ${e.message}"
+            )
+        }
+    }
+
+    /** True if the request carries our token via URL prefix OR cookie. */
+    private fun isAuthorized(session: IHTTPSession): Boolean {
+        val uri = session.uri ?: ""
+        if (uri == tokenPrefix || uri.startsWith("$tokenPrefix/")) return true
+
+        val cookieHeader = session.headers?.get("cookie") ?: return false
+        // Parse a minimal "k=v; k=v" cookie header looking for our key.
+        for (part in cookieHeader.split(';')) {
+            val kv = part.trim().split('=', limit = 2)
+            if (kv.size == 2 && kv[0] == COOKIE_NAME && kv[1] == token) return true
+        }
+        return false
+    }
+
+    private fun stripTokenPrefix(uri: String): String {
+        return when {
+            uri == tokenPrefix -> ""
+            uri.startsWith("$tokenPrefix/") -> uri.removePrefix(tokenPrefix)
+            else -> uri // cookie-authed request; use path as-is
         }
     }
 
     private fun serveMainPage(): Response {
+        // All links/fetches are rooted at the tokenized base "./", so relative
+        // URLs resolve under /t/<token>/ without ever embedding the token in
+        // the HTML source.
         val html = """
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <base href="./">
                 <title>ShelfWise - Wireless Transfer</title>
                 <style>
                     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -110,25 +172,25 @@ class HttpFileServer(
                             xhr.upload.onprogress = (e) => { if(e.lengthComputable) progressFill.style.width = (e.loaded/e.total*100)+'%'; };
                             xhr.onload = () => { i++; progressFill.style.width = '0%'; uploadNext(); };
                             xhr.onerror = () => { statusText.textContent = 'Error uploading ' + file.name; i++; uploadNext(); };
-                            xhr.open('POST', '/upload');
+                            xhr.open('POST', 'upload');
                             xhr.send(formData);
                         }
                         uploadNext();
                     }
 
                     function loadFiles() {
-                        fetch('/files').then(r => r.json()).then(files => {
+                        fetch('files').then(r => r.json()).then(files => {
                             const list = document.getElementById('fileList');
                             if (files.length === 0) { list.innerHTML = '<p class="empty">No files yet. Upload some books!</p>'; return; }
                             list.innerHTML = '<ul class="file-list">' + files.map(f =>
-                                '<li class="file-item"><span class="file-name">' + f.name + '</span><span class="file-size">' + f.size + '</span><span class="file-actions"><a href="/download/' + encodeURIComponent(f.name) + '">Download</a><button class="delete" onclick="deleteFile(\'' + encodeURIComponent(f.name) + '\')">Delete</button></span></li>'
+                                '<li class="file-item"><span class="file-name">' + f.name + '</span><span class="file-size">' + f.size + '</span><span class="file-actions"><a href="download/' + encodeURIComponent(f.name) + '">Download</a><button class="delete" onclick="deleteFile(\'' + encodeURIComponent(f.name) + '\')">Delete</button></span></li>'
                             ).join('') + '</ul>';
                         });
                     }
 
                     function deleteFile(name) {
                         if (!confirm('Delete this file?')) return;
-                        fetch('/delete/' + name, {method:'POST'}).then(() => loadFiles());
+                        fetch('delete/' + name, {method:'POST'}).then(() => loadFiles());
                     }
 
                     loadFiles();
@@ -147,8 +209,8 @@ class HttpFileServer(
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
     }
 
-    private fun serveFileDownload(session: IHTTPSession): Response {
-        val fileName = java.net.URLDecoder.decode(session.uri.removePrefix("/download/"), "UTF-8")
+    private fun serveFileDownload(relPath: String): Response {
+        val fileName = java.net.URLDecoder.decode(relPath.removePrefix("/download/"), "UTF-8")
         val file = File(uploadDir, fileName)
         if (!file.exists() || !file.canonicalPath.startsWith(uploadDir.canonicalPath)) {
             return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "File not found")
@@ -193,8 +255,8 @@ class HttpFileServer(
         return newFixedLengthResponse(Response.Status.OK, MIME_PLAINTEXT, "OK")
     }
 
-    private fun handleDelete(session: IHTTPSession): Response {
-        val fileName = java.net.URLDecoder.decode(session.uri.removePrefix("/delete/"), "UTF-8")
+    private fun handleDelete(relPath: String): Response {
+        val fileName = java.net.URLDecoder.decode(relPath.removePrefix("/delete/"), "UTF-8")
         val file = File(uploadDir, fileName)
         if (file.exists() && file.canonicalPath.startsWith(uploadDir.canonicalPath)) {
             file.delete()
@@ -214,7 +276,29 @@ class HttpFileServer(
         }
     }
 
+    /** Redact the token from any URI before writing it to logs. */
+    private fun sanitizeForLog(uri: String?): String {
+        if (uri == null) return "<null>"
+        return if (uri.contains(token)) uri.replace(token, "<redacted>") else uri
+    }
+
     companion object {
         private const val MIME_HTML = "text/html"
+        private const val TAG = "HttpFileServer"
+        private const val COOKIE_NAME = "shelfwise_auth"
+        private const val TOKEN_LENGTH = 6
+
+        // Base32-ish alphabet, dropping visually ambiguous glyphs 0/O/1/I/L.
+        private const val TOKEN_ALPHABET =
+            "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+
+        private fun generateToken(): String {
+            val rng = SecureRandom()
+            val sb = StringBuilder(TOKEN_LENGTH)
+            repeat(TOKEN_LENGTH) {
+                sb.append(TOKEN_ALPHABET[rng.nextInt(TOKEN_ALPHABET.length)])
+            }
+            return sb.toString()
+        }
     }
 }

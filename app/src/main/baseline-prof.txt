@@ -1,0 +1,19 @@
+# Baseline Profile - placeholder
+#
+# This file is intentionally empty. AGP will still copy it into the APK and
+# the ProfileInstaller dependency will register it at install time; an empty
+# file is a no-op (no startup classes warmed up) but having the file and the
+# dependency in place means profile generation can be added later without a
+# build-system change.
+#
+# To populate this file:
+#   1. Add a `:baselineprofile` Gradle module that uses
+#      `androidx.benchmark:benchmark-macro-junit4` + the Baseline Profile
+#      Gradle plugin (`androidx.baselineprofile`).
+#   2. Write a `BaselineProfileGenerator` test that exercises cold-start +
+#      key user journeys (library list, reader open, settings).
+#   3. Run `./gradlew :app:generateBaselineProfile` on a rooted / userdebug
+#      device or emulator; the generated rules will be written here.
+#
+# Format reference:
+# https://developer.android.com/topic/performance/baselineprofiles/manually-create-baselineprofile

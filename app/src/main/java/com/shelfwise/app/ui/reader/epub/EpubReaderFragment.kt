@@ -23,6 +23,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.shelfwise.app.databinding.FragmentEpubReaderBinding
 import com.shelfwise.app.util.showToast
 import com.shelfwise.app.reader.epub.EpubParser
+import com.shelfwise.app.reader.epub.EpubSession
 import com.shelfwise.app.util.appContainer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -62,8 +63,33 @@ class EpubReaderFragment : Fragment() {
             return
         }
 
-        viewModel.loadBook(bookId)
+        // Guard against reloading on configuration changes (rotation etc.): if the
+        // VM already holds parsed content for this book, don't re-parse.
+        if (viewModel.state.value.book == null) {
+            viewModel.loadBook(bookId)
+        }
         observeState()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Settings may have changed while we were away; re-apply blue-light overlay.
+        applyBlueLightOverlay()
+    }
+
+    /**
+     * Applies [PreferencesManager.blueLightFilter] + [PreferencesManager.blueLightIntensity]
+     * to the overlay View. Intensity (0..100) is mapped onto an alpha of 0.0..0.6 so
+     * the screen is never completely blocked.
+     */
+    private fun applyBlueLightOverlay() {
+        val binding = _binding ?: return
+        val prefs = appContainer.preferencesManager
+        val enabled = prefs.blueLightFilter
+        val intensity = prefs.blueLightIntensity.coerceIn(0, 100)
+        val alpha = (intensity / 100f) * MAX_BLUE_LIGHT_ALPHA
+        binding.blueLightOverlay.alpha = alpha
+        binding.blueLightOverlay.isVisible = enabled && intensity > 0
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -112,8 +138,8 @@ class EpubReaderFragment : Fragment() {
             }
         }
 
-        // Apply blue light filter
-        binding.blueLightOverlay.isVisible = appContainer.preferencesManager.blueLightFilter
+        // Apply blue-light overlay initially; kept in sync on each onResume().
+        applyBlueLightOverlay()
     }
 
     private fun interceptEpubResource(url: Uri): WebResourceResponse? {
@@ -124,7 +150,10 @@ class EpubReaderFragment : Fragment() {
         val normalized = normalizeZipPath(rawPath) ?: return null
         val bytes = try {
             runBlocking {
-                snapshot.parser.getResource(snapshot.bookUri, "", normalized)
+                // Resolve through the shared EpubSession (cached ZipFile + O(1)
+                // manifest lookup) so worker-thread reads don't re-open the SAF
+                // stream per resource.
+                snapshot.session.getResource(normalized)
             }
         } catch (_: Exception) {
             null
@@ -169,7 +198,7 @@ class EpubReaderFragment : Fragment() {
     // Snapshot of data needed by the WebView worker thread for interception.
     // Volatile: written on UI thread, read on WebView worker thread.
     private data class AssetSnapshot(
-        val parser: EpubParser,
+        val session: EpubSession,
         val bookUri: Uri
     )
 
@@ -202,6 +231,8 @@ class EpubReaderFragment : Fragment() {
 
     companion object {
         private const val EPUB_ASSET_HOST = "shelfwise.local"
+        // Cap blue-light overlay alpha so the screen is never fully blocked.
+        private const val MAX_BLUE_LIGHT_ALPHA = 0.6f
     }
 
     private fun setupControls() {
@@ -239,11 +270,18 @@ class EpubReaderFragment : Fragment() {
 
                     state.book?.let { book ->
                         binding.titleText.text = book.title
-                        // Refresh the worker-thread snapshot whenever the book changes.
+                        // Refresh the worker-thread snapshot whenever the book (or
+                        // backing session) changes. The snapshot carries the same
+                        // EpubSession the VM uses, so WebView worker-thread reads
+                        // hit the cached ZipFile + manifest rather than re-opening SAF.
+                        val activeSession = viewModel.currentSession()
                         val currentSnap = assetSnapshot
-                        if (currentSnap == null || currentSnap.bookUri.toString() != book.filePath) {
+                        if (activeSession != null &&
+                            (currentSnap == null ||
+                                currentSnap.session !== activeSession ||
+                                currentSnap.bookUri.toString() != book.filePath)) {
                             assetSnapshot = AssetSnapshot(
-                                parser = EpubParser(requireContext().applicationContext),
+                                session = activeSession,
                                 bookUri = Uri.parse(book.filePath)
                             )
                         }

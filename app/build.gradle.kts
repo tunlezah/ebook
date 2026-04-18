@@ -15,11 +15,21 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Locale shrinking - drop Material's bundled translations (~1-2 MB)
+        resourceConfigurations += listOf("en")
+
+        // ABI filters - only ship common mobile ABIs
+        ndk {
+            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     buildTypes {
         debug {
             isDebuggable = true
+            isJniDebuggable = false
+            isCrunchPngs = false
             applicationIdSuffix = ".debug"
         }
         release {
@@ -44,6 +54,30 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    packaging {
+        resources.excludes += setOf(
+            "META-INF/AL2.0",
+            "META-INF/LGPL2.1",
+            "META-INF/*.kotlin_module",
+            "META-INF/DEPENDENCIES",
+            "META-INF/LICENSE*",
+            "META-INF/NOTICE*",
+            "kotlin/**"
+        )
+    }
+
+    // Expose the Room-exported schemas directory to instrumentation tests
+    // so future migration tests can read the JSON schema files.
+    sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    }
+}
+
+// Room KSP schema export + incremental processing
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
 }
 
 dependencies {
@@ -81,14 +115,17 @@ dependencies {
     // Image Loading - Coil (lightweight, Kotlin-first)
     implementation("io.coil-kt:coil:2.5.0")
 
-    // Preferences
-    implementation("androidx.preference:preference-ktx:1.2.1")
-
     // NanoHTTPD - Embedded HTTP server for wireless file transfer
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // SwipeRefreshLayout
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+
+    // App Startup - dependency included for future initializer registration.
+    implementation("androidx.startup:startup-runtime:1.1.1")
+
+    // Baseline Profile installer - ships the baseline-prof.txt into the APK.
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

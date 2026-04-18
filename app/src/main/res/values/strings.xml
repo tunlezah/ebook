@@ -55,6 +55,7 @@
     <string name="transfer_notification_text">Server running at %s</string>
     <string name="transfer_no_wifi">Please connect to a Wi-Fi network first.</string>
     <string name="transfer_auto_stop">Server will auto-stop after %d minutes of inactivity.</string>
+    <string name="transfer_url_token_warning">Share this URL only with trusted devices on your network. The token rotates each time you start the server.</string>
 
     <!-- Book Detail -->
     <string name="book_detail_read">Read</string>
